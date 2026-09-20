@@ -1,36 +1,39 @@
-volumes: 
-  postgres-data: 
-  redis-data: 
-  server-data: 
- 
+volumes:
+  postgres-data:
+  redis-data:
+  server-data:
+
 services:
   postgres:
     image: postgres:15.3
 
-    volumes: 
-      - postgres-data:/var/lib/postgresql/data 
- 
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: koc
 
-    ports: 
-      - "5432:5432" 
- 
+    ports:
+      - "5432:5432"
+
   redis:
     image: redis:7.0.11
 
-    volumes: 
-      - redis-data:/data 
- 
+    volumes:
+      - redis-data:/data
+
   server:
-    image: ghcr.io/kocxyz/serverdocker
+    image: ghcr.io/knockoutcity-pirate-radio/serverdocker
     build: .
 
-    volumes: 
-      - server-data:/data 
- 
+    volumes:
+      - server-data:/data
+      # Everything a content patch needs, read-only. Drop the three files a
+      # Pirate Radio Studio export produced into ./patch.
+      - ./patch:/patch:ro
+
     environment:
       KOC_BACKEND_MAX_PLAYER_CONNECTIONS: 10
       KOC_SECRET:
@@ -43,10 +46,37 @@ services:
       KOC_BACKEND_REDIS_DB_HOST: redis
       KOC_BACKEND_REDIS_DB_PORT: 6379
 
+      # The server half of the patch: unpacked into out/data on every boot
+      # where the file's checksum changed. Leave unset to manage out/data
+      # yourself.
+      KOC_CONTENT_PATCH: ${KOC_CONTENT_PATCH:-}
+      # The client half: what clients are told to download at login.
+      KOC_CONTENT_PATCH_MANIFEST: ${KOC_CONTENT_PATCH_MANIFEST:-}
+      # The address *clients* reach the file server on. Must be the public
+      # one -- "localhost" here points every client at its own machine.
+      KOC_CONTENT_PATCH_URL: ${KOC_CONTENT_PATCH_URL:-}
+      # Set to anything but "true" to run a stock server executable.
+      KOC_APPLY_EXE_PATCHES: ${KOC_APPLY_EXE_PATCHES:-true}
+      # Server flags this image does not map to an env var of its own.
+      KOC_EXTRA_ARGS: ${KOC_EXTRA_ARGS:-}
+
     ports:
-      - "23600:23600" 
+      - "23600:23600"
       - "23600-23699:23600-23699/udp"
 
     depends_on:
       - redis
       - postgres
+
+  # Serves the client archive so the URL in the manifest row resolves. Drop
+  # this service if you host the file somewhere else.
+  content:
+    image: caddy:2-alpine
+
+    command: caddy file-server --root /srv --listen :80
+
+    volumes:
+      - ./patch:/srv:ro
+
+    ports:
+      - "${KOC_CONTENT_PORT:-8080}:80"

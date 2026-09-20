@@ -3,6 +3,11 @@ name: Create and publish Docker image
 on:
   release:
     types: [published]
+  # A push to the default branch publishes too, so a host can pull the
+  # current main without a release being cut for every change.
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -31,6 +36,14 @@ jobs:
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # `latest` is what compose.yaml pulls when it names no tag, so the
+          # default branch has to carry it or an untagged reference resolves
+          # to nothing. Releases keep their version tags alongside.
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4

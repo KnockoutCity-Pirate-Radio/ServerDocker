@@ -1,0 +1,5 @@
+# Everything is text and stays LF, in the repository and in the working tree.
+# Without this a Windows checkout gives entrypoint.sh CRLF endings, and the
+# container dies on its shebang with a bad-interpreter error that names no
+# cause.
+* text=auto eol=lf

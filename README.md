@@ -16,7 +16,7 @@
     An <b>Unofficial</b> Docker Image that allows running a Private Server of <a href="https://www.knockoutcity.com/">Knockout City</a>.
     <br />
     <br />
-    <a href="https://github.com/kocxyz/ServerDocker/issues">Report Bug</a>
+    <a href="https://github.com/KnockoutCity-Pirate-Radio/ServerDocker/issues">Report Bug</a>
   </p>
 </div>
 
@@ -32,6 +32,7 @@
         <li><a href="#environment-variables">Environment Variables</a></li>
       </ul>
     </li>
+    <li><a href="#hosting-a-content-patch">Hosting a Content Patch</a></li>
     <li><a href="#notes-on-data-folder-location">Notes on Data Folder Location</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -69,7 +70,7 @@ docker run --rm -it -v /opt/KnockOutCity/data:/data steamcmd/steamcmd:latest +@s
 Some issues where seen where Wine doesn't like it.
 Always use a dedicated folder (e.g., `/opt/KnockOutCity/data`).
 ## Usage
-Copy the [`compose.yaml`](https://github.com/kocxyz/ServerDocker/blob/main/docker-compose.yml) and tweak it to your liking.
+Copy the [`compose.yaml`](https://github.com/KnockoutCity-Pirate-Radio/ServerDocker/blob/main/compose.yaml) and tweak it to your liking.
 
 After downloading the game data and setting up your `compose.yaml`, you can start the server as follows:
 
@@ -90,6 +91,73 @@ For detailed information on the different parameters, please refer to the Knocko
 | `KOC_BACKEND_DB`                     | Yes          | PostgreSQL connection string to use a running PostgreSQL server.                    |
 | `KOC_BACKEND_REDIS_DB_HOST`          | Yes          | Hostname of a running Redis Server.                                                 |
 | `KOC_BACKEND_REDIS_DB_PORT`          | No           | Port of a running Redis Server.*default*: 6379                                      |
+| `KOC_EXTRA_ARGS`                     | No           | Extra flags appended to the server command line, for anything this image does not map to a variable of its own. |
+| `KOC_APPLY_EXE_PATCHES`              | No           | Apply the commerce patches to the server executable on boot. *default*: `true`      |
+| `KOC_CONTENT_PATCH`                  | No           | Path (inside the container) or URL of the **server half** of a content patch. See below. |
+| `KOC_CONTENT_PATCH_MANIFEST`         | No           | Path of the export's `.content_patch.json`, which advertises the **client half**.    |
+| `KOC_CONTENT_PATCH_URL`              | No           | The public address clients download the client half from. Required when a manifest is given. |
+
+---
+## Hosting a Content Patch
+
+A content patch is how a server runs modified content -- a custom event, a new
+store, changed levels -- without anyone reinstalling the game.
+
+It has two halves, and they must come from the same export:
+
+- the **server half**, a zip of loose files unpacked into the server's
+  `out/data`;
+- the **client half**, a signed archive that every client downloads and
+  installs at login, using the game's own content-update mechanism. No modding
+  tools, no manual file copying, nothing for players to install.
+
+Drop the three files a Pirate Radio Studio export produced into `./patch`:
+
+```text
+patch/
+  holoween-2026-09-20-1.vzip                  the client half (signed)
+  holoween-2026-09-20-1-server.zip            the server half
+  holoween-2026-09-20-1.content_patch.json    what to tell clients
+```
+
+Point the server at them with a `.env` beside your `compose.yaml`:
+
+```env
+KOC_CONTENT_PATCH=/patch/holoween-2026-09-20-1-server.zip
+KOC_CONTENT_PATCH_MANIFEST=/patch/holoween-2026-09-20-1.content_patch.json
+KOC_CONTENT_PATCH_URL=http://your-public-address:8080/holoween-2026-09-20-1.vzip
+```
+
+Then `docker compose up`. On boot the container unpacks the server half into
+`out/data`, patches the server executable, and -- once the backend has created
+its tables -- registers the client half so logging-in clients fetch it.
+Restarting changes nothing unless the zip's checksum changed.
+
+The bundled `content` service serves `./patch` over HTTP so that URL resolves.
+Drop the service if you host the file elsewhere; only the URL matters.
+
+### Four things that will bite you
+
+- **`KOC_CONTENT_PATCH_URL` must be the address your *players* reach**, not
+  the one you use locally. `localhost` there tells every client to download
+  from its own machine.
+- **Every new build of a patch needs a new file name.** A client decides
+  whether it already has a package by that name alone. Re-publish changed
+  content under a name someone already installed and their game will not
+  fetch it -- they will play stale content against a patched server, with no
+  error to tell them so. A Studio export mints a fresh name every time; keep
+  it.
+- **`out/data` belongs to the container while `KOC_CONTENT_PATCH` is set**,
+  and is deleted and rebuilt whenever the patch changes. Do not bind-mount
+  your own folder there at the same time; the container refuses that
+  combination rather than delete your files. To manage the folder yourself,
+  leave `KOC_CONTENT_PATCH` unset.
+- **The executable patches change commerce behaviour**, and are on by default:
+  the shipped private-server build grants every accessory to every player and
+  deletes most imported store offers on startup. Both are fixed here. Nothing
+  else is touched -- in particular this image never enables the game's debug
+  code paths. Set `KOC_APPLY_EXE_PATCHES` to anything but `true` for a stock
+  executable.
 
 ---
 ## Notes on Data Folder Location
