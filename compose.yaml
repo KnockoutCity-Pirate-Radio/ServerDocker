@@ -52,8 +52,10 @@ services:
       KOC_CONTENT_PATCH: ${KOC_CONTENT_PATCH:-}
       # The client half: what clients are told to download at login.
       KOC_CONTENT_PATCH_MANIFEST: ${KOC_CONTENT_PATCH_MANIFEST:-}
-      # The address *clients* reach the file server on. Must be the public
-      # one -- "localhost" here points every client at its own machine.
+      # The folder *clients* download the archives from; each archive's file
+      # name is appended. Must be the public address -- "localhost" here
+      # points every client at its own machine. Not needed for a package
+      # whose "url" is filled in the manifest.
       KOC_CONTENT_PATCH_URL: ${KOC_CONTENT_PATCH_URL:-}
       # Set to anything but "true" to run a stock server executable.
       KOC_APPLY_EXE_PATCHES: ${KOC_APPLY_EXE_PATCHES:-true}

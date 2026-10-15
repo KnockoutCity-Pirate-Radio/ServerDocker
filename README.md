@@ -95,7 +95,7 @@ For detailed information on the different parameters, please refer to the Knocko
 | `KOC_APPLY_EXE_PATCHES`              | No           | Apply the commerce patches to the server executable on boot. *default*: `true`      |
 | `KOC_CONTENT_PATCH`                  | No           | Path (inside the container) or URL of the **server half** of a content patch. See below. |
 | `KOC_CONTENT_PATCH_MANIFEST`         | No           | Path of the export's `.content_patch.json`, which advertises the **client half**.    |
-| `KOC_CONTENT_PATCH_URL`              | No           | The public address clients download the client half from. Required when a manifest is given. |
+| `KOC_CONTENT_PATCH_URL`              | No           | The public folder clients download the client half from; each archive's file name is appended. Required when a manifest is given, unless every package in it has its own `url`. |
 
 ---
 ## Hosting a Content Patch
@@ -107,15 +107,19 @@ It has two halves, and they must come from the same export:
 
 - the **server half**, a zip of loose files unpacked into the server's
   `out/data`;
-- the **client half**, a signed archive that every client downloads and
+- the **client half**, signed archives that every client downloads and
   installs at login, using the game's own content-update mechanism. No modding
-  tools, no manual file copying, nothing for players to install.
+  tools, no manual file copying, nothing for players to install. There is one
+  archive per texture resolution: `-gen1` for low-res clients (platform
+  `win64`), `-gen2` for high-res ones (platform `win64-gen2`). Each client
+  only fetches its own.
 
-Drop the three files a Pirate Radio Studio export produced into `./patch`:
+Drop the four files a Pirate Radio Studio export produced into `./patch`:
 
 ```text
 patch/
-  holoween-2026-09-20-1.vzip                  the client half (signed)
+  holoween-2026-09-20-1-gen1.vzip             the client half, low-res (signed)
+  holoween-2026-09-20-1-gen2.vzip             the client half, high-res (signed)
   holoween-2026-09-20-1-server.zip            the server half
   holoween-2026-09-20-1.content_patch.json    what to tell clients
 ```
@@ -125,16 +129,23 @@ Point the server at them with a `.env` beside your `compose.yaml`:
 ```env
 KOC_CONTENT_PATCH=/patch/holoween-2026-09-20-1-server.zip
 KOC_CONTENT_PATCH_MANIFEST=/patch/holoween-2026-09-20-1.content_patch.json
-KOC_CONTENT_PATCH_URL=http://your-public-address:8080/holoween-2026-09-20-1.vzip
+KOC_CONTENT_PATCH_URL=http://your-public-address:8080/
 ```
+
+`KOC_CONTENT_PATCH_URL` is the folder the archives are served from; each
+archive's file name is appended to it. If you host the archives somewhere
+else, you can instead fill in the `url` of each package in the
+`.content_patch.json` with that archive's full address and leave
+`KOC_CONTENT_PATCH_URL` unset. A package's own `url` always wins.
 
 Then `docker compose up`. On boot the container unpacks the server half into
 `out/data`, patches the server executable, and -- once the backend has created
 its tables -- registers the client half so logging-in clients fetch it.
 Restarting changes nothing unless the zip's checksum changed.
 
-The bundled `content` service serves `./patch` over HTTP so that URL resolves.
-Drop the service if you host the file elsewhere; only the URL matters.
+The bundled `content` service serves `./patch` over HTTP so those URLs
+resolve. Drop the service if you host the files elsewhere; only the URLs
+matter.
 
 ### Four things that will bite you
 
